@@ -1,0 +1,27 @@
+
+boxSize 10000.0 10000.0 10000.0
+
+T 300.0
+h 0.001
+
+nStepsSteepestDescent 10000
+nStepsSteepestDescentProgressInterval 1000
+maxObjectiveForce 100.0
+
+outPutFilePath output
+outPutFormat sp
+
+dt 0.1
+frictionConstant 1.0
+
+#stopTransRotSteps 1000
+
+inputCoordPath p22ex.coord
+inputTopologyPath p22ex.top
+
+VerletListDst 65.0
+
+nSteps 100000
+nStepsInfoInterval 1000
+nStepsWriteInterval 1000
+
