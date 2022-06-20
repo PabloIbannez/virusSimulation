@@ -1,16 +1,14 @@
+#include "uammd.cuh"
+
 #include "UAMMDstructured.cuh"
 
-using namespace uammd::structured;
-    
-using Units = UnitsSystem::KCALMOL_A;
+#include "Integrator/VerletNVE.cuh"
 
-using ffGeneric = forceField::Generic::Generic<Units,
-                                               Types::BASIC,
-                                               conditions::excludedIntraInterChargedInter>;
+using Units = uammd::structured::UnitsSystem::KCALMOL_A;
 
-using SIMfree = Simulation<ffGeneric,
-                           SteepestDescent,
-                           LangevinNVT::BBK>;
+using ffGeneric = uammd::structured::forceField::Generic::Generic<Units,
+                                                                  uammd::structured::Types::BASIC,
+                                                                  uammd::structured::conditions::excludedIntraInterChargedInter>;
 
 int main(int argc, char** argv){
 
@@ -21,60 +19,61 @@ int main(int argc, char** argv){
 
     uammd::InputFile in(argv[1]);
 
-    std::shared_ptr<SIMfree> sim = std::make_shared<SIMfree>(sys,in);
+    auto pd = uammd::structured::Wrapper::setUpParticleData(sys,in);
+    auto pg = uammd::structured::Wrapper::setUpParticleGroup(pd,in);
+    auto ff = uammd::structured::Wrapper::setUpForceField<ffGeneric>(pg,in);
+  
+    typename uammd::VerletNVE::Parameters par;
+
+    in.getOption("dt",uammd::InputFile::Required)>>par.dt;
+
+    par.dt     = par.dt*Units::TO_INTERNAL_TIME;
+    par.initVelocities = false;
+
+    uammd::real T;
+    in.getOption("T",uammd::InputFile::Required)>>T;
+
+    uammd::real kBT = Units::KBOLTZ*T;
+    uammd::System::log<uammd::System::MESSAGE>("kBT:%f",kBT);
+
+    uammd::structured::IntegratorBasic_ns::generateVelocity(pg,kBT,"Init",0);
+    cudaDeviceSynchronize();
+
+    auto integrator = std::make_shared<uammd::VerletNVE>(pd, par);
     
-    auto pd  = sim->getParticleData();
+    integrator->addInteractor(ff);
 
-    std::map<int,std::shared_ptr<uammd::ParticleGroup>> simGroups;
-    {
-        std::set<int> simList;
-        {
-            auto simId = pd->getSimulationId(uammd::access::location::cpu,uammd::access::mode::read);
+    int nSteps, nStepsInfoInterval, nStepsWriteInterval;
 
-            fori(0,pd->getNumParticles()){
-                simList.emplace(simId[i]);
-            }
+    in.getOption("nSteps",uammd::InputFile::Required)>>nSteps;
+    in.getOption("nStepsInfoInterval",uammd::InputFile::Required)>>nStepsInfoInterval;
+    in.getOption("nStepsWriteInterval",uammd::InputFile::Required)>>nStepsWriteInterval;
+    
+    uammd::structured::WriteStep<Units>::Parameters wParam = uammd::structured::WriteStep<Units>::inputFileToParam(in);
+    
+    std::shared_ptr<uammd::structured::WriteStep<Units>> wStep = std::make_shared<uammd::structured::WriteStep<Units>>(pg,
+                                                                                                                       nStepsWriteInterval,
+                                                                                                                       wParam);
+
+    wStep->tryInit(0);
+    wStep->tryApplyStep(0,0,true);
+    cudaDeviceSynchronize();
+  
+    uammd::Timer tim;
+    tim.tic();
+    forj(0, nSteps){
+        integrator->forwardTime();
+        if(nStepsInfoInterval > 0 and j%nStepsInfoInterval==0){
+            uammd::System::log<uammd::System::MESSAGE>("Current step: %i",j);
         }
-        
-        for(const int& s : simList){
-            selectors::simulationId selector(s);
-
-            auto pgs = std::make_shared<uammd::ParticleGroup>(selector,
-                                                              pd,
-                                                              sys,
-                                                              "simId_"+std::to_string(s));
-            simGroups[s]=pgs;
+        if(nStepsWriteInterval > 0 and j%nStepsWriteInterval==0){
+            wStep->tryApplyStep(j,0);
+            cudaDeviceSynchronize();
         }
     }
-        
-    {
-        WriteStep<Units>::Parameters paramBase = WriteStep<Units>::inputFileToParam(in);
 
-        int interval = std::stoi(in.getOption("nStepsWriteInterval",uammd::InputFile::Required).str());
-
-        for(auto pg : simGroups){    
-            
-            auto groupIndex  = pg.second->getIndexIterator(uammd::access::location::cpu);
-            
-            auto simId = pd->getSimulationId(uammd::access::location::cpu,uammd::access::mode::read);
-            int  s = simId[groupIndex[0]];
-            
-            WriteStep<Units>::Parameters param = paramBase;
-            param.outPutFilePath = paramBase.outPutFilePath+"_"+std::to_string(s);
-            
-            std::shared_ptr<WriteStep<Units>> wStep = std::make_shared<WriteStep<Units>>(sys,
-                                                                                         pd,
-                                                                                         pg.second,
-                                                                                         interval,
-                                                                                         param);
-
-            wStep->setPBC(false);
-            sim->addSimulationStep(wStep);
-        }
-    }
-
-    sim->run();
-    
+    auto totalTime = tim.toc();
+    uammd::System::log<uammd::System::MESSAGE>("mean FPS: %.2f", nSteps/totalTime);
     sys->finish();
     
     return EXIT_SUCCESS;

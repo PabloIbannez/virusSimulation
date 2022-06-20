@@ -4,7 +4,7 @@ CXX=g++
 CUDA_ROOT=/usr/local/cuda
 NVCC=$(CUDA_ROOT)/bin/nvcc
 
-UAMMD_ROOT=$(UAMMDPATH)
+UAMMD_ROOT=/home/pablo/Desktop/UAMMDnew
 UAMMD_STRUCTURED_ROOT=$(UAMMD_ROOT)/extensions/structured/
 
 #Uncomment to compile in double precision mode, single by default
@@ -27,5 +27,5 @@ INCLUDE_FLAGS= -I$(CUDA_ROOT)/include -I$(UAMMD_ROOT)/src/ -I$(UAMMD_ROOT)/src/t
 LIBRARIES=
 
 vs:  
-	$(NVCC) --use_fast_math --expt-relaxed-constexpr --expt-extended-lambda -std=c++17 -O3 $(OPTIONS) -ccbin="$(CXX)" -Xcompiler="$(CPU)" $(GENCODE_FLAGS) virusSimulation.cu $(INCLUDE_FLAGS) $(LIBRARIES) -o vsim
+	$(NVCC) --expt-relaxed-constexpr --expt-extended-lambda -std=c++17 -O3 $(OPTIONS) -ccbin="$(CXX)" -Xcompiler="$(CPU)" $(GENCODE_FLAGS) virusSimulation.cu $(INCLUDE_FLAGS) $(LIBRARIES) -o vsim
 	mv vsim ../bin
