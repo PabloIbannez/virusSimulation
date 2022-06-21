@@ -36,8 +36,7 @@ int main(int argc, char** argv){
     uammd::real kBT = Units::KBOLTZ*T;
     uammd::System::log<uammd::System::MESSAGE>("[VelocityGeneration] kBT:%f",kBT);
 
-    uammd::structured::IntegratorBasic_ns::generateVelocity(pg,kBT,"VelocityGeneration",0);
-    cudaDeviceSynchronize();
+    uammd::structured::IntegratorBasic_ns::generateVelocity(pg,kBT,"VelocityGeneration");
 
     auto integrator = std::make_shared<uammd::VerletNVE>(pd, par);
     
@@ -65,15 +64,13 @@ int main(int argc, char** argv){
                                                                                                                    nStepsMeasureInterval,
                                                                                                                    "inertia.dat");
 
-    wStep->tryInit(0);
-    wStep->tryApplyStep(0,0,true);
-    cudaDeviceSynchronize();
-    
-    eStep->tryInit(0);
-    eStep->tryApplyStep(0,0,true);
-    iStep->tryInit(0);
-    iStep->tryApplyStep(0,0,true);
-    cudaDeviceSynchronize();
+    wStep->tryInit();
+    eStep->tryInit();
+    iStep->tryInit();
+
+    wStep->tryApplyStep(0,true);
+    eStep->tryApplyStep(0,true);
+    iStep->tryApplyStep(0,true);
   
     uammd::Timer tim;
     tim.tic();
@@ -83,15 +80,11 @@ int main(int argc, char** argv){
             uammd::System::log<uammd::System::MESSAGE>("Current step: %i",j);
         }
         if(nStepsWriteInterval > 0 and j%nStepsWriteInterval==0){
-            cudaDeviceSynchronize();
-            wStep->tryApplyStep(j,0);
-            cudaDeviceSynchronize();
+            wStep->tryApplyStep(j);
         }
         if(nStepsMeasureInterval > 0 and j%nStepsMeasureInterval==0){
-            cudaDeviceSynchronize();
-            eStep->tryApplyStep(j,0);
-            iStep->tryApplyStep(j,0);
-            cudaDeviceSynchronize();
+            eStep->tryApplyStep(j);
+            iStep->tryApplyStep(j);
         }
     }
 
