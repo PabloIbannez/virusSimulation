@@ -16,4 +16,5 @@ VerletListDst 12.0
 nSteps 1000000
 nStepsInfoInterval 10000
 nStepsWriteInterval 10000
+nStepsMeasureInterval 1000
 

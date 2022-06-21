@@ -4,7 +4,7 @@ CXX=g++
 CUDA_ROOT=/usr/local/cuda
 NVCC=$(CUDA_ROOT)/bin/nvcc
 
-UAMMD_ROOT=/home/pablo/Desktop/UAMMDnew
+UAMMD_ROOT=/home/pablo/Desktop/UAMMD
 UAMMD_STRUCTURED_ROOT=$(UAMMD_ROOT)/extensions/structured/
 
 #Uncomment to compile in double precision mode, single by default

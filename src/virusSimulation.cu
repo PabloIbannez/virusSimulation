@@ -34,29 +34,45 @@ int main(int argc, char** argv){
     in.getOption("T",uammd::InputFile::Required)>>T;
 
     uammd::real kBT = Units::KBOLTZ*T;
-    uammd::System::log<uammd::System::MESSAGE>("kBT:%f",kBT);
+    uammd::System::log<uammd::System::MESSAGE>("[VelocityGeneration] kBT:%f",kBT);
 
-    uammd::structured::IntegratorBasic_ns::generateVelocity(pg,kBT,"Init",0);
+    uammd::structured::IntegratorBasic_ns::generateVelocity(pg,kBT,"VelocityGeneration",0);
     cudaDeviceSynchronize();
 
     auto integrator = std::make_shared<uammd::VerletNVE>(pd, par);
     
     integrator->addInteractor(ff);
 
-    int nSteps, nStepsInfoInterval, nStepsWriteInterval;
-
+    int nSteps, nStepsInfoInterval, nStepsWriteInterval, nStepsMeasureInterval;
+    
     in.getOption("nSteps",uammd::InputFile::Required)>>nSteps;
     in.getOption("nStepsInfoInterval",uammd::InputFile::Required)>>nStepsInfoInterval;
     in.getOption("nStepsWriteInterval",uammd::InputFile::Required)>>nStepsWriteInterval;
+    in.getOption("nStepsMeasureInterval",uammd::InputFile::Required)>>nStepsMeasureInterval;
     
     uammd::structured::WriteStep<Units>::Parameters wParam = uammd::structured::WriteStep<Units>::inputFileToParam(in);
     
     std::shared_ptr<uammd::structured::WriteStep<Units>> wStep = std::make_shared<uammd::structured::WriteStep<Units>>(pg,
                                                                                                                        nStepsWriteInterval,
                                                                                                                        wParam);
+    
+    std::shared_ptr<uammd::structured::EnergyMeasure<ffGeneric>> eStep = std::make_shared<uammd::structured::EnergyMeasure<ffGeneric>>(pg,
+                                                                                                                                       nStepsMeasureInterval,
+                                                                                                                                       "energy.dat",
+                                                                                                                                       ff);
+    
+    std::shared_ptr<uammd::structured::InertiaMeasure> iStep = std::make_shared<uammd::structured::InertiaMeasure>(pg,
+                                                                                                                   nStepsMeasureInterval,
+                                                                                                                   "inertia.dat");
 
     wStep->tryInit(0);
     wStep->tryApplyStep(0,0,true);
+    cudaDeviceSynchronize();
+    
+    eStep->tryInit(0);
+    eStep->tryApplyStep(0,0,true);
+    iStep->tryInit(0);
+    iStep->tryApplyStep(0,0,true);
     cudaDeviceSynchronize();
   
     uammd::Timer tim;
@@ -67,7 +83,14 @@ int main(int argc, char** argv){
             uammd::System::log<uammd::System::MESSAGE>("Current step: %i",j);
         }
         if(nStepsWriteInterval > 0 and j%nStepsWriteInterval==0){
+            cudaDeviceSynchronize();
             wStep->tryApplyStep(j,0);
+            cudaDeviceSynchronize();
+        }
+        if(nStepsMeasureInterval > 0 and j%nStepsMeasureInterval==0){
+            cudaDeviceSynchronize();
+            eStep->tryApplyStep(j,0);
+            iStep->tryApplyStep(j,0);
             cudaDeviceSynchronize();
         }
     }
